@@ -28,19 +28,65 @@ Your final app should:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+.venv\Scripts\activate       # Windows
+# source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 ```
 
-### Suggested workflow
+### Run the Streamlit app
 
-1. Read the scenario carefully and identify requirements and edge cases.
-2. Draft a UML diagram (classes, attributes, methods, relationships).
-3. Convert UML into Python class stubs (no logic yet).
-4. Implement scheduling logic in small increments.
-5. Add tests to verify key behaviors.
-6. Connect your logic to the Streamlit UI in `app.py`.
-7. Refine UML so it matches what you actually built.
+```bash
+# Windows
+.venv\Scripts\streamlit.exe run app.py --server.port 8080
+
+# macOS/Linux
+streamlit run app.py
+```
+
+### Run the CLI demo
+
+```bash
+python main.py
+```
+
+### Run the test suite
+
+```bash
+python -m pytest tests/ -v
+```
+
+### 💾 Data Persistence
+
+Owner profiles, pets, and tasks are automatically saved to `pawpal_data.json`
+in the project root every time you make a change in the Streamlit UI.
+When you reopen the app, your data is restored automatically — no manual
+import needed.
+
+To start fresh, click **Reset profile** in the sidebar (this deletes the
+save file) or delete `pawpal_data.json` manually.
+
+**Files involved:**
+- `persistence.py` — `save_owner()` / `load_owner()` serialise/deserialise
+  the full Owner → Pet → Task object graph to JSON
+- `app.py` — calls `_save()` after every mutation; calls `load_owner()` at
+  startup
+
+### 🎨 Output Formatting
+
+The CLI demo (`main.py`) uses ANSI colour codes and Unicode emoji for
+structured, readable output:
+
+| Element | Format |
+|---|---|
+| Section headers | ANSI bold cyan `══` borders |
+| Priority labels | 🔴 high / 🟡 medium / 🟢 low |
+| Recurring tasks | 🔁 badge |
+| Conflict warnings | ANSI red ⚠ |
+| Success messages | ANSI green ✔ |
+| Scheduling reasons | ANSI dim indented text |
+
+The Streamlit UI uses `st.success`, `st.warning`, `st.error`, progress bars,
+and `st.dataframe` for the same information in a browser context.
 
 ## 🖥️ Sample Output
 

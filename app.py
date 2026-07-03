@@ -12,6 +12,8 @@ New in Phase 6:
   occurrence and shows a confirmation toast
 - Skipped-task callout redesigned as st.warning cards
 - Schedule explanation: expandable plain-English reasoning from explain_plan()
+- JSON persistence: owner + pets + tasks auto-saved to pawpal_data.json on
+  every change, auto-loaded on startup
 """
 
 import streamlit as st
@@ -26,13 +28,15 @@ from pawpal_system import (
     TASK_CATEGORIES,
     RECURRENCE_OPTIONS,
 )
+from persistence import save_owner, load_owner
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
 
 # ── Session-state bootstrap ───────────────────────────────────────────────────
 if "owner" not in st.session_state:
-    st.session_state.owner: Owner | None = None
+    # Try to restore from disk on first load
+    st.session_state.owner: Owner | None = load_owner("pawpal_data.json")
 
 if "schedule_results" not in st.session_state:
     st.session_state.schedule_results: dict = {}   # pet_id → {blocks, scheduler}
@@ -41,6 +45,11 @@ if "schedule_results" not in st.session_state:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def get_owner() -> Owner | None:
     return st.session_state.owner
+
+def _save() -> None:
+    """Persist current owner state to disk after any mutation."""
+    if st.session_state.owner is not None:
+        save_owner(st.session_state.owner, "pawpal_data.json")
 
 def priority_badge(priority: str) -> str:
     return {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "⚪")
@@ -73,13 +82,18 @@ with st.sidebar:
                     email=owner_email.strip(),
                     available_minutes_per_day=int(budget),
                 )
+                _save()
                 st.rerun()
     else:
         owner = get_owner()
         st.success(f"**{owner.name}**  |  Budget: {owner.available_minutes_per_day} min/day")
+        st.caption("💾 Data auto-saved to `pawpal_data.json`")
         if st.button("Reset profile", use_container_width=True):
+            import os
             st.session_state.owner = None
             st.session_state.schedule_results = {}
+            if os.path.exists("pawpal_data.json"):
+                os.remove("pawpal_data.json")
             st.rerun()
 
     st.divider()
@@ -99,6 +113,7 @@ with st.sidebar:
                     breed=breed.strip() or "unknown",
                     age_years=int(age),
                 ))
+                _save()
                 st.rerun()
 
         pets = get_owner().get_pets()
@@ -113,6 +128,7 @@ with st.sidebar:
                     if st.button(f"Remove {pet.name}", key=f"del_pet_{pet.pet_id}"):
                         st.session_state.owner.remove_pet(pet.pet_id)
                         st.session_state.schedule_results.pop(pet.pet_id, None)
+                        _save()
                         st.rerun()
 
 
@@ -170,6 +186,7 @@ for idx, pet in enumerate(pets):
                         recurrence_frequency=t_freq if t_recurring else "none",
                     ))
                     st.session_state.schedule_results.pop(pet.pet_id, None)
+                    _save()
                     st.rerun()
 
         # ── Algorithm controls: filter + sort ────────────────────────────
@@ -228,6 +245,7 @@ for idx, pet in enumerate(pets):
                                 tmp_sched = Scheduler(owner=owner, pet=pet)
                                 next_t = tmp_sched.mark_task_complete(task)
                                 st.session_state.schedule_results.pop(pet.pet_id, None)
+                                _save()
                                 if next_t:
                                     st.toast(
                                         f"✅ '{task.title}' done!  "
@@ -240,6 +258,7 @@ for idx, pet in enumerate(pets):
                             if st.button("🗑", key=f"del_{task.task_id}", help="Remove task"):
                                 pet.remove_task(task.task_id)
                                 st.session_state.schedule_results.pop(pet.pet_id, None)
+                                _save()
                                 st.rerun()
 
 
