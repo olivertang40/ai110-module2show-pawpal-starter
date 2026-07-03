@@ -5,7 +5,7 @@ Run:  python -m pytest tests/ -v
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pawpal_system import Owner, Pet, Scheduler, ScheduledBlock, Task
 
@@ -224,3 +224,178 @@ class TestScheduler:
         sched.build_schedule(self._today)
         explanation = sched.explain_plan()
         assert sample_pet.name in explanation
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Algorithm layer tests (Phase 4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSortByTime:
+    _today = datetime(2026, 7, 3)
+
+    def test_sort_by_time_orders_correctly(self, sample_owner, sample_pet):
+        """sort_by_time() must return tasks in ascending scheduled_time order."""
+        late   = Task("Late",   duration_minutes=10, priority="low",    scheduled_time=self._today.replace(hour=18))
+        early  = Task("Early",  duration_minutes=10, priority="high",   scheduled_time=self._today.replace(hour=8))
+        midday = Task("Midday", duration_minutes=10, priority="medium", scheduled_time=self._today.replace(hour=12))
+        for t in [late, early, midday]:
+            sample_pet.add_task(t)
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+        result = sched.sort_by_time()
+        times = [t.scheduled_time for t in result if t.scheduled_time]
+        assert times == sorted(times)
+
+    def test_sort_by_time_puts_none_last(self, sample_owner, sample_pet):
+        """Tasks without a scheduled_time must appear after timed tasks."""
+        timed = Task("Timed",   duration_minutes=10, priority="low",    scheduled_time=self._today.replace(hour=9))
+        untimed = Task("Untimed", duration_minutes=10, priority="high")  # no scheduled_time
+        sample_pet.add_task(untimed)
+        sample_pet.add_task(timed)
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+        result = sched.sort_by_time()
+        assert result[-1].scheduled_time is None
+
+
+class TestFilterTasks:
+    def _tasks(self):
+        return [
+            Task("Walk A",   category="walk",      duration_minutes=30, priority="high"),
+            Task("Feed B",   category="feeding",   duration_minutes=10, priority="high"),
+            Task("Play C",   category="enrichment",duration_minutes=20, priority="medium"),
+            Task("Groom D",  category="grooming",  duration_minutes=15, priority="low"),
+        ]
+
+    def test_filter_by_category(self):
+        """filter_tasks(category='walk') must return only walk tasks."""
+        result = Scheduler.filter_tasks(self._tasks(), category="walk")
+        assert all(t.category == "walk" for t in result)
+        assert len(result) == 1
+
+    def test_filter_by_priority(self):
+        """filter_tasks(priority='high') must return only high-priority tasks."""
+        result = Scheduler.filter_tasks(self._tasks(), priority="high")
+        assert all(t.priority == "high" for t in result)
+        assert len(result) == 2
+
+    def test_filter_completed_false(self):
+        """filter_tasks(completed=False) must exclude completed tasks."""
+        tasks = self._tasks()
+        tasks[0].complete()
+        result = Scheduler.filter_tasks(tasks, completed=False)
+        assert all(not t.is_completed for t in result)
+        assert len(result) == 3
+
+    def test_filter_completed_true(self):
+        """filter_tasks(completed=True) must return only completed tasks."""
+        tasks = self._tasks()
+        tasks[1].complete()
+        result = Scheduler.filter_tasks(tasks, completed=True)
+        assert all(t.is_completed for t in result)
+        assert len(result) == 1
+
+    def test_filter_combined(self):
+        """Multiple filter criteria must be AND-combined."""
+        tasks = self._tasks()
+        tasks[0].complete()   # Walk A — high, walk, complete
+        result = Scheduler.filter_tasks(tasks, completed=True, priority="high")
+        assert len(result) == 1
+        assert result[0].title == "Walk A"
+
+
+class TestRecurringTaskRenewal:
+    def test_next_occurrence_daily(self):
+        """next_occurrence() for a daily task must be scheduled +1 day ahead."""
+        base_time = datetime(2026, 7, 3, 8, 0)
+        t = Task("Morning walk", is_recurring=True, recurrence_frequency="daily",
+                 duration_minutes=30, priority="high", scheduled_time=base_time)
+        nxt = t.next_occurrence()
+        assert nxt is not None
+        assert nxt.scheduled_time == base_time + timedelta(days=1)
+        assert nxt.is_completed is False
+
+    def test_next_occurrence_weekly(self):
+        """next_occurrence() for a weekly task must be scheduled +7 days ahead."""
+        base_time = datetime(2026, 7, 3, 10, 0)
+        t = Task("Flea treatment", is_recurring=True, recurrence_frequency="weekly",
+                 duration_minutes=10, priority="medium", scheduled_time=base_time)
+        nxt = t.next_occurrence()
+        assert nxt is not None
+        assert nxt.scheduled_time == base_time + timedelta(weeks=1)
+
+    def test_next_occurrence_non_recurring_returns_none(self):
+        """next_occurrence() on a non-recurring task must return None."""
+        t = Task("One-off task", is_recurring=False, duration_minutes=10, priority="low")
+        assert t.next_occurrence() is None
+
+    def test_mark_task_complete_adds_new_task(self, sample_owner, sample_pet):
+        """mark_task_complete() on a recurring task must add a new task to the pet."""
+        recurring = Task("Daily walk", is_recurring=True, recurrence_frequency="daily",
+                         duration_minutes=30, priority="high",
+                         scheduled_time=datetime(2026, 7, 3, 7, 0))
+        sample_pet.add_task(recurring)
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+
+        before_count = len(sample_pet.get_tasks())
+        next_task = sched.mark_task_complete(recurring)
+
+        assert recurring.is_completed is True
+        assert next_task is not None
+        assert len(sample_pet.get_tasks()) == before_count + 1
+        assert next_task in sample_pet.get_tasks()
+
+    def test_mark_task_complete_non_recurring_no_new_task(self, sample_owner, sample_pet):
+        """mark_task_complete() on a non-recurring task must not add any new task."""
+        one_off = Task("One-off groom", is_recurring=False, duration_minutes=15, priority="low")
+        sample_pet.add_task(one_off)
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+
+        before_count = len(sample_pet.get_tasks())
+        result = sched.mark_task_complete(one_off)
+
+        assert one_off.is_completed is True
+        assert result is None
+        assert len(sample_pet.get_tasks()) == before_count  # no new task added
+
+
+class TestConflictWarnings:
+    _today = datetime(2026, 7, 3)
+
+    def test_warnings_on_overlap(self, sample_owner, sample_pet):
+        """conflict_warnings() must return a non-empty list when blocks overlap."""
+        t1 = Task("Task A", duration_minutes=60, priority="high")
+        t2 = Task("Task B", duration_minutes=30, priority="medium")
+        start = self._today.replace(hour=10)
+        b1 = ScheduledBlock(task=t1, start_time=start)
+        b2 = ScheduledBlock(task=t2, start_time=start + timedelta(minutes=30))  # inside b1
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+        warnings = sched.conflict_warnings([b1, b2])
+        assert len(warnings) == 1
+        assert "Conflict" in warnings[0]
+
+    def test_no_warnings_when_sequential(self, sample_owner, sample_pet):
+        """conflict_warnings() must return [] for back-to-back non-overlapping blocks."""
+        t1 = Task("Task A", duration_minutes=30, priority="high")
+        t2 = Task("Task B", duration_minutes=30, priority="medium")
+        start = self._today.replace(hour=10)
+        b1 = ScheduledBlock(task=t1, start_time=start)
+        b2 = ScheduledBlock(task=t2, start_time=start + timedelta(minutes=30))
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+        assert sched.conflict_warnings([b1, b2]) == []
+
+    def test_warnings_are_strings(self, sample_owner, sample_pet):
+        """Each warning returned must be a plain string."""
+        t1 = Task("A", duration_minutes=60, priority="high")
+        t2 = Task("B", duration_minutes=60, priority="high")
+        start = self._today.replace(hour=9)
+        b1 = ScheduledBlock(task=t1, start_time=start)
+        b2 = ScheduledBlock(task=t2, start_time=start)
+        sample_owner.add_pet(sample_pet)
+        sched = Scheduler(owner=sample_owner, pet=sample_pet)
+        warnings = sched.conflict_warnings([b1, b2])
+        assert all(isinstance(w, str) for w in warnings)

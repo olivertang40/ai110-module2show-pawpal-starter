@@ -35,13 +35,21 @@ During skeleton creation, AI review flagged one missing element: the original sk
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints, applied in this order:
+
+1. **Completion status** — `get_pending_tasks()` filters out any task already marked done before the scheduler sees it. There is no point scheduling work that's finished.
+2. **Priority** — `sort_tasks_by_priority()` uses `sorted()` with a lambda key `(PRIORITY_ORDER[t.priority], t.duration_minutes)`. High-priority tasks always precede medium, which always precede low. Within the same priority, shorter tasks come first (quick-wins heuristic — minimises the number of tasks that get cut off at the end of the day).
+3. **Owner time budget** — `filter_by_available_time()` greedily accumulates tasks until the running total would exceed `owner.available_minutes_per_day`. Any task that would push the total over the budget is skipped.
+
+The priority constraint was ranked first because the scenario description explicitly mentions "priority" as the primary scheduling signal, and missing a high-priority task (medication, feeding) is more harmful than missing a low-priority one (grooming).
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The scheduler uses a **greedy, priority-first** algorithm rather than an optimal knapsack-style search.
+
+*Tradeoff:* A greedy approach can produce a suboptimal total-minutes-scheduled result. For example, if the budget is 30 minutes and we have tasks of [high/25 min, medium/20 min, low/10 min], the greedy algorithm picks the 25-minute high task and then the 10-minute low task (35 > 30, so medium is skipped even though 20+10=30 would also fit with more variety).
+
+*Why it's reasonable here:* Pet care is priority-critical. A dog medication task at "high" should never be bumped in favour of fitting in more medium tasks. The predictability and simplicity of greedy also makes the scheduler's reasoning easy for users to understand — they can see exactly why each task was included or skipped.
 
 ---
 

@@ -50,6 +50,31 @@ class Task:
         """Move the task to a new start time."""
         self.scheduled_time = new_time
 
+    def next_occurrence(self) -> Optional["Task"]:
+        """
+        For recurring tasks, return a *new* Task instance scheduled for the
+        next occurrence (today + 1 day for daily, + 7 days for weekly).
+        Returns None if the task is not recurring.
+
+        The new instance starts as incomplete so it will be picked up by
+        the next call to get_pending_tasks().
+        """
+        if not self.is_recurring or self.recurrence_frequency == "none":
+            return None
+
+        base = self.scheduled_time or datetime.now()
+        delta = timedelta(days=1) if self.recurrence_frequency == "daily" else timedelta(weeks=1)
+        return Task(
+            title=self.title,
+            category=self.category,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            is_recurring=self.is_recurring,
+            recurrence_frequency=self.recurrence_frequency,
+            is_completed=False,
+            scheduled_time=base + delta,
+        )
+
     def __post_init__(self) -> None:
         if self.priority not in PRIORITY_ORDER:
             raise ValueError(f"priority must be one of {list(PRIORITY_ORDER.keys())}")
@@ -257,6 +282,115 @@ class Scheduler:
     def get_recurring_tasks(self) -> list[Task]:
         """Return all recurring tasks assigned to this pet."""
         return [t for t in self.pet.get_tasks() if t.is_recurring]
+
+    def sort_by_time(self, tasks: Optional[list[Task]] = None) -> list[Task]:
+        """
+        Sort tasks by their scheduled_time (earliest first).
+        Tasks without a scheduled_time are placed at the end.
+
+        Uses a lambda key so that None times sort after all real datetimes,
+        avoiding a TypeError when mixing datetime and None.
+
+        Args:
+            tasks: List to sort. Defaults to all tasks on the pet.
+
+        Returns:
+            A new sorted list (original is not mutated).
+        """
+        source = tasks if tasks is not None else self.pet.get_tasks()
+        return sorted(
+            source,
+            key=lambda t: (t.scheduled_time is None, t.scheduled_time or datetime.min),
+        )
+
+    @staticmethod
+    def filter_tasks(
+        tasks: list[Task],
+        *,
+        completed: Optional[bool] = None,
+        pet_name: Optional[str] = None,
+        category: Optional[str] = None,
+        priority: Optional[str] = None,
+    ) -> list[Task]:
+        """
+        Filter a flat list of tasks by one or more optional criteria.
+
+        All supplied criteria are combined with AND logic — a task must
+        satisfy every non-None criterion to be included.
+
+        Args:
+            tasks:     Source list to filter (not mutated).
+            completed: If True, keep only completed tasks; if False, keep only
+                       pending tasks; if None, no completion filter is applied.
+            pet_name:  Case-insensitive substring match on task title prefix
+                       (tasks don't store a back-reference to their pet, so
+                       callers should pass the tasks of a specific pet when
+                       filtering by name makes sense).
+            category:  Exact match on task.category (e.g. "walk", "feeding").
+            priority:  Exact match on task.priority ("high", "medium", "low").
+
+        Returns:
+            A new list containing only the matching tasks.
+        """
+        result = tasks
+        if completed is not None:
+            result = [t for t in result if t.is_completed == completed]
+        if pet_name is not None:
+            result = [t for t in result if pet_name.lower() in t.title.lower()]
+        if category is not None:
+            result = [t for t in result if t.category == category]
+        if priority is not None:
+            result = [t for t in result if t.priority == priority]
+        return result
+
+    def mark_task_complete(self, task: Task) -> Optional[Task]:
+        """
+        Mark a task complete and, if it is recurring, automatically create
+        the next occurrence and attach it to the same pet.
+
+        This is the preferred way to complete tasks — it handles the
+        recurring-task lifecycle in one call instead of requiring callers
+        to manage next_occurrence() manually.
+
+        Args:
+            task: The Task to complete. Must already belong to self.pet.
+
+        Returns:
+            The newly created next-occurrence Task, or None if the task
+            is not recurring.
+        """
+        task.complete()
+        next_task = task.next_occurrence()
+        if next_task is not None:
+            self.pet.add_task(next_task)
+        return next_task
+
+    def conflict_warnings(
+        self, blocks: Optional[list[ScheduledBlock]] = None
+    ) -> list[str]:
+        """
+        Return human-readable warning strings for any overlapping blocks,
+        rather than raising an exception.
+
+        Lightweight strategy: O(n²) pairwise overlap check. Suitable for
+        typical daily schedules (< 20 tasks per pet).
+
+        Args:
+            blocks: Blocks to check. Defaults to self.schedule.
+
+        Returns:
+            A list of warning strings. Empty list means no conflicts.
+        """
+        pairs = self.detect_conflicts(blocks)
+        warnings: list[str] = []
+        for a, b in pairs:
+            warnings.append(
+                f"⚠ Conflict: '{a.task.title}' "
+                f"({a.start_time.strftime('%H:%M')}–{a.end_time.strftime('%H:%M')}) "
+                f"overlaps with '{b.task.title}' "
+                f"({b.start_time.strftime('%H:%M')}–{b.end_time.strftime('%H:%M')})"
+            )
+        return warnings
 
     def explain_plan(self) -> str:
         """

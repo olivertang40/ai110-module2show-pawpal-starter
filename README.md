@@ -138,10 +138,13 @@ tests/test_pawpal.py::TestScheduler::test_explain_plan_contains_pet_name PASSED
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | `Scheduler.sort_tasks_by_priority()` | high → medium → low; ties broken by duration (shorter first) |
-| Filtering | `Scheduler.filter_by_available_time()` | Greedy cut: stop adding tasks once owner's daily budget is reached |
-| Conflict handling | `Scheduler.detect_conflicts()` | O(n²) pairwise overlap check; `build_schedule()` is always conflict-free by construction |
-| Recurring tasks | `Task.is_recurring` + `recurrence_frequency` | Flagged with 🔁 in output; `get_recurring_tasks()` returns them for review |
+| Priority sorting | `Scheduler.sort_tasks_by_priority()` | high → medium → low; ties broken by duration (shorter first — quick-wins heuristic) |
+| Time-based sorting | `Scheduler.sort_by_time()` | Sorts by `Task.scheduled_time` ascending; tasks with no time slot are placed last via `(is None, value)` lambda key |
+| Multi-criteria filtering | `Scheduler.filter_tasks()` | Static method; filters by `completed`, `category`, `priority`, or `pet_name` — criteria are AND-combined |
+| Budget filtering | `Scheduler.filter_by_available_time()` | Greedy cut — stops adding tasks once `owner.available_minutes_per_day` is reached |
+| Conflict detection | `Scheduler.detect_conflicts()` | O(n²) pairwise overlap check on `ScheduledBlock` objects; returns conflicting pairs |
+| Conflict warnings | `Scheduler.conflict_warnings()` | Wraps `detect_conflicts()` and returns human-readable warning strings instead of raising exceptions |
+| Recurring task renewal | `Task.next_occurrence()` + `Scheduler.mark_task_complete()` | Completing a recurring task auto-creates a new `Task` instance offset by `timedelta(days=1)` (daily) or `timedelta(weeks=1)` (weekly) and attaches it to the pet |
 
 ## 📸 Demo Walkthrough
 
