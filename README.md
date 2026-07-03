@@ -102,36 +102,35 @@ python -m pytest tests/ -v
 pytest --cov
 ```
 
+**What the tests cover:**
+
+| Group | Tests | What's verified |
+|---|---|---|
+| `TestTask` | 5 | Completion status, reschedule, invalid inputs, unique IDs |
+| `TestPet` | 5 | Add/remove tasks, pending-only filter |
+| `TestOwner` | 3 | Add/remove pets |
+| `TestScheduler` | 8 | Priority order, budget cap, no conflicts, skip completed, empty list, over-budget task, conflict detection, explain_plan |
+| `TestSortByTime` | 2 | Chronological order, None-time tasks sort last |
+| `TestFilterTasks` | 5 | Filter by category, priority, completion, combined AND criteria |
+| `TestRecurringTaskRenewal` | 5 | next_occurrence() daily/weekly/None, mark_task_complete() adds new task |
+| `TestConflictWarnings` | 3 | Overlap detected, sequential blocks clear, return type is str |
+| `TestEdgeCases` | 19 | All-completed → empty; budget = exact total; 1-min over window skipped; short-first tiebreak; medium before low; chronological blocks; explain_plan before build; start-time accuracy; property inheritance; new ID on recurrence; completed removed from pending; 3-way conflict count; adjacent blocks don't conflict; empty/no-criteria/zero-match filter; all-None sort; single-task sort |
+
+**Confidence level: ★★★★★** (5/5)
+
 Sample test output:
 
 ```
 ==================================== test session starts ====================================
 platform win32 -- Python 3.11.9, pytest-9.1.1
-collected 21 items
+collected 55 items
 
-tests/test_pawpal.py::TestTask::test_task_completion_changes_status PASSED
-tests/test_pawpal.py::TestTask::test_task_reschedule_updates_time PASSED
-tests/test_pawpal.py::TestTask::test_invalid_priority_raises PASSED
-tests/test_pawpal.py::TestTask::test_invalid_duration_raises PASSED
-tests/test_pawpal.py::TestTask::test_task_has_unique_id PASSED
-tests/test_pawpal.py::TestPet::test_add_task_increases_count PASSED
-tests/test_pawpal.py::TestPet::test_add_multiple_tasks PASSED
-tests/test_pawpal.py::TestPet::test_remove_task_decreases_count PASSED
-tests/test_pawpal.py::TestPet::test_remove_nonexistent_task_returns_false PASSED
-tests/test_pawpal.py::TestPet::test_get_pending_tasks_excludes_completed PASSED
-tests/test_pawpal.py::TestOwner::test_add_pet_increases_count PASSED
-tests/test_pawpal.py::TestOwner::test_remove_pet PASSED
-tests/test_pawpal.py::TestOwner::test_remove_nonexistent_pet_returns_false PASSED
-tests/test_pawpal.py::TestScheduler::test_schedule_respects_priority_order PASSED
-tests/test_pawpal.py::TestScheduler::test_schedule_does_not_exceed_budget PASSED
-tests/test_pawpal.py::TestScheduler::test_no_conflicts_in_generated_schedule PASSED
-tests/test_pawpal.py::TestScheduler::test_completed_tasks_excluded_from_schedule PASSED
-tests/test_pawpal.py::TestScheduler::test_empty_task_list_gives_empty_schedule PASSED
-tests/test_pawpal.py::TestScheduler::test_task_too_long_for_budget_is_skipped PASSED
-tests/test_pawpal.py::TestScheduler::test_conflict_detection_finds_overlap PASSED
-tests/test_pawpal.py::TestScheduler::test_explain_plan_contains_pet_name PASSED
+tests/test_pawpal.py::TestTask::test_task_completion_changes_status PASSED           [  1%]
+tests/test_pawpal.py::TestTask::test_task_reschedule_updates_time PASSED             [  3%]
+...
+tests/test_pawpal.py::TestEdgeCases::test_sort_by_time_single_task PASSED            [100%]
 
-==================================== 21 passed in 0.06s =====================================
+==================================== 55 passed in 0.20s =====================================
 ```
 
 ## 📐 Smarter Scheduling

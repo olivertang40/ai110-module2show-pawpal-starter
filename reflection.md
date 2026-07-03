@@ -71,13 +71,23 @@ The scheduler uses a **greedy, priority-first** algorithm rather than an optimal
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+The test suite has 55 tests across 9 classes covering:
+
+- **Normal paths** (`TestTask`, `TestPet`, `TestOwner`, `TestScheduler`): basic CRUD operations, status changes, and schedule generation under typical conditions.
+- **Algorithm correctness** (`TestSortByTime`, `TestFilterTasks`, `TestRecurringTaskRenewal`, `TestConflictWarnings`): verifying that sorting, filtering, recurring-task renewal, and conflict detection all produce the expected output.
+- **Boundary / edge cases** (`TestEdgeCases`): 19 tests targeting the boundaries that are most likely to break silently — exact budget equality, 1-minute window overflow, all-tasks-completed, same-priority tiebreaking, adjacent-but-not-overlapping blocks, empty inputs, and inherited properties on recurrence.
+
+These tests matter because pet care has real stakes. Missing a medication task or double-booking two activities because of an off-by-one error in the time-window check could mislead a user. The edge cases were specifically chosen to probe the exact boundary conditions in the greedy algorithm and `timedelta` arithmetic.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Confidence: ★★★★★ (5/5) for the logic covered by the test suite.
+
+Edge cases I would test next with more time:
+- **Multi-pet shared budget**: what happens if the same owner has 10 pets and 60-minute budget — does the scheduler per-pet or pool-wide?
+- **Timezone-aware datetimes**: the current code uses naive `datetime` objects; adding `pytz`/`zoneinfo` support would require re-testing all time arithmetic.
+- **Concurrent modification**: adding a task while a schedule is being built (not an issue in the synchronous CLI, but relevant in the async Streamlit context).
+- **Very large task lists** (1000+ tasks): confirm `O(n²)` conflict detection stays within acceptable time bounds.
 
 ---
 
