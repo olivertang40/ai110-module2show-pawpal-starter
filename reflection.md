@@ -4,13 +4,30 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+The three core operations I identified for PawPal+ are:
+1. **Add a pet** — an owner registers a pet with basic info (name, species, breed, age).
+2. **Add/edit tasks** — attach care activities (walks, feeding, meds, etc.) to a pet with duration and priority.
+3. **Generate a daily schedule** — the system sorts pending tasks by priority, fits them into the owner's available time window, and returns a conflict-free, time-stamped plan.
+
+I designed five classes:
+
+| Class | Responsibility |
+|---|---|
+| `Task` | A single care activity. Holds title, category, duration, priority, recurrence, and completion status. Implemented as a Python `dataclass` for brevity. |
+| `Pet` | Represents one animal. Owns a list of `Task` objects and exposes `add_task`, `remove_task`, and `get_pending_tasks`. Also a `dataclass`. |
+| `Owner` | The human user. Stores name, email, daily time budget (minutes), and a list of `Pet` objects. |
+| `ScheduledBlock` | A wrapper that pairs a `Task` with a concrete `start_time` and a human-readable `reason`. Computed `end_time` via `@property`. |
+| `Scheduler` | The algorithmic core. Takes an `Owner` and a `Pet`, sorts tasks by priority, filters by time budget, assigns consecutive time slots, detects conflicts, and explains the plan. |
+
+Relationships: `Owner` owns `Pet`(s); `Pet` has `Task`(s); `Scheduler` references `Owner` and `Pet` and produces `ScheduledBlock`(s), each wrapping one `Task`.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+During skeleton creation, AI review flagged one missing element: the original sketch didn't have a dedicated `ScheduledBlock` class — tasks were going to be mutated directly with `scheduled_time`. I split that out into `ScheduledBlock` instead, because:
+
+- It keeps `Task` immutable-ish (tasks don't need to know when they're scheduled).
+- It makes conflict detection cleaner — blocks can be compared without touching the underlying task.
+- It allows the same `Task` to appear in multiple schedules (e.g., across different days) without side effects.
 
 ---
 

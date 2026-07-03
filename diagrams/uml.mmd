@@ -1,15 +1,69 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
-    %% Keep this file updated so it matches your final implementation.
+    %% PawPal+ System UML — Phase 1 Draft
 
-    class ClassName {
-        +type attribute
-        +method() returnType
+    class Owner {
+        +str owner_id
+        +str name
+        +str email
+        +int available_minutes_per_day
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +remove_pet(pet_id: str) None
+        +get_pets() list~Pet~
     }
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
+    class Pet {
+        +str pet_id
+        +str name
+        +str species
+        +str breed
+        +int age_years
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +remove_task(task_id: str) None
+        +get_tasks() list~Task~
+        +get_pending_tasks() list~Task~
     }
 
-    ClassName --> AnotherClass : relationship
+    class Task {
+        +str task_id
+        +str title
+        +str category
+        +int duration_minutes
+        +str priority
+        +bool is_recurring
+        +str recurrence_frequency
+        +bool is_completed
+        +datetime scheduled_time
+        +complete() None
+        +reschedule(new_time: datetime) None
+    }
+
+    class Scheduler {
+        +Owner owner
+        +Pet pet
+        +int day_start_hour
+        +int day_end_hour
+        +list~ScheduledBlock~ schedule
+        +build_schedule() list~ScheduledBlock~
+        +sort_tasks_by_priority(tasks: list~Task~) list~Task~
+        +detect_conflicts(blocks: list~ScheduledBlock~) list~tuple~
+        +filter_by_available_time(tasks: list~Task~) list~Task~
+        +get_recurring_tasks() list~Task~
+        +explain_plan() str
+    }
+
+    class ScheduledBlock {
+        +Task task
+        +datetime start_time
+        +datetime end_time
+        +str reason
+        +duration() int
+    }
+
+    Owner "1" --> "1..*" Pet : owns
+    Pet "1" --> "0..*" Task : has
+    Scheduler "1" --> "1" Owner : references
+    Scheduler "1" --> "1" Pet : schedules for
+    Scheduler "1" --> "0..*" ScheduledBlock : produces
+    ScheduledBlock "1" --> "1" Task : wraps
