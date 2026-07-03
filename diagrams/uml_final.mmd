@@ -1,0 +1,77 @@
+classDiagram
+    %% PawPal+ — Final UML (Phase 6)
+    %% Reflects the actual implementation in pawpal_system.py
+
+    class Owner {
+        +str owner_id
+        +str name
+        +str email
+        +int available_minutes_per_day
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +remove_pet(pet_id: str) bool
+        +get_pets() list~Pet~
+    }
+
+    class Pet {
+        +str pet_id
+        +str name
+        +str species
+        +str breed
+        +int age_years
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +remove_task(task_id: str) bool
+        +get_tasks() list~Task~
+        +get_pending_tasks() list~Task~
+    }
+
+    class Task {
+        +str task_id
+        +str title
+        +str category
+        +int duration_minutes
+        +str priority
+        +bool is_recurring
+        +str recurrence_frequency
+        +bool is_completed
+        +datetime scheduled_time
+        +complete() None
+        +reschedule(new_time: datetime) None
+        +next_occurrence() Task
+    }
+
+    class ScheduledBlock {
+        +Task task
+        +datetime start_time
+        +str reason
+        +end_time() datetime
+        +duration() int
+        +overlaps_with(other: ScheduledBlock) bool
+    }
+
+    class Scheduler {
+        +Owner owner
+        +Pet pet
+        +int day_start_hour
+        +int day_end_hour
+        +list~ScheduledBlock~ schedule
+        +build_schedule(reference_date) list~ScheduledBlock~
+        +sort_tasks_by_priority(tasks) list~Task~
+        +sort_by_time(tasks) list~Task~
+        +filter_tasks(tasks, completed, category, priority) list~Task~
+        +filter_by_available_time(tasks) list~Task~
+        +mark_task_complete(task) Task
+        +detect_conflicts(blocks) list~tuple~
+        +conflict_warnings(blocks) list~str~
+        +get_recurring_tasks() list~Task~
+        +explain_plan() str
+    }
+
+    Owner "1" --> "0..*" Pet       : owns
+    Pet   "1" --> "0..*" Task      : has
+    Scheduler "1" --> "1" Owner    : references
+    Scheduler "1" --> "1" Pet      : schedules for
+    Scheduler "1" --> "0..*" ScheduledBlock : produces
+    ScheduledBlock "1" --> "1" Task : wraps
+    Scheduler ..> Task             : creates via mark_task_complete

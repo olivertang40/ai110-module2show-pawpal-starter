@@ -145,10 +145,70 @@ tests/test_pawpal.py::TestEdgeCases::test_sort_by_time_single_task PASSED       
 | Conflict warnings | `Scheduler.conflict_warnings()` | Wraps `detect_conflicts()` and returns human-readable warning strings instead of raising exceptions |
 | Recurring task renewal | `Task.next_occurrence()` + `Scheduler.mark_task_complete()` | Completing a recurring task auto-creates a new `Task` instance offset by `timedelta(days=1)` (daily) or `timedelta(weeks=1)` (weekly) and attaches it to the pet |
 
+## ✨ Features
+
+| Feature | Where | How it works |
+|---|---|---|
+| Owner profile | Sidebar | Creates an `Owner` with name and daily time budget (minutes) |
+| Multi-pet support | Sidebar | Add/remove any number of `Pet` objects per owner |
+| Task management | Per-pet tab | Add tasks with title, category, duration, priority, recurrence |
+| Priority-based scheduling | Schedule tab | `Scheduler.sort_tasks_by_priority()` — high → medium → low; ties broken by duration |
+| Time-based sorting | Per-pet tab filter | `Scheduler.sort_by_time()` — reorders task list by `scheduled_time` ascending |
+| Multi-criteria filtering | Per-pet tab filter | `Scheduler.filter_tasks()` — filter by category, priority, and/or completion status |
+| Budget enforcement | Schedule tab | `Scheduler.filter_by_available_time()` — greedy cut when owner budget is reached |
+| Conflict detection | Schedule tab | `Scheduler.conflict_warnings()` — prominent error banner for overlapping blocks |
+| Recurring task renewal | Per-pet tab ✔ button | `Scheduler.mark_task_complete()` — completing a recurring task auto-adds the next occurrence |
+| Plan explanation | Schedule tab expandable | `Scheduler.explain_plan()` — plain-English reason for every scheduled block |
+| Skipped task callout | Schedule tab | Warning cards for tasks that didn't fit the budget |
+
 ## 📸 Demo Walkthrough
 
-1. Run `python main.py` in the project root (with the venv activated).
-2. The script creates owner **Jordan** with two pets: **Mochi** (Shiba Inu) and **Luna** (Scottish Fold).
-3. Each pet has 6–7 tasks spanning high/medium/low priorities and recurring/one-off types.
-4. The `Scheduler` sorts tasks by priority, filters to fit within Jordan's 150-minute daily budget, assigns back-to-back time slots starting at 07:00, and prints a formatted plan.
-5. A conflict check runs automatically — the greedy algorithm guarantees no overlaps, which is confirmed with ✔.
+### Workflow: Add a pet → add tasks → generate schedule
+
+**Step 1 — Create owner profile**
+Open the sidebar. Enter your name and set your daily care budget (e.g. 120 minutes). Click **Create profile**. The sidebar updates to show your name and budget.
+
+**Step 2 — Add a pet**
+Still in the sidebar, fill in your pet's name, species, breed, and age. Click **Add pet**. The pet appears in the sidebar list and a new tab opens in the main area.
+
+**Step 3 — Add tasks to the pet**
+Click the pet's tab. Expand **Add a new task**. Add several tasks with different priorities (e.g. Medication — high, 5 min; Morning walk — high, 30 min; Grooming — low, 15 min). Recurring tasks get a 🔁 badge.
+
+**Step 4 — Filter and sort the task list**
+Use the **Filter & Sort** row above the task list. Selecting `priority = high` instantly filters to only high-priority tasks via `Scheduler.filter_tasks()`. Checking **Sort by scheduled time** re-orders via `Scheduler.sort_by_time()`.
+
+**Step 5 — Mark a recurring task complete**
+Click ✔ on a recurring task. A toast notification confirms completion and announces the next occurrence was auto-created. The task list updates; the new instance appears as pending.
+
+**Step 6 — Generate the daily schedule**
+Click the **📅 Daily Schedule** tab. Choose a date and day window. Click **Generate schedule for all pets**. Each pet's schedule appears as:
+- A budget progress bar (e.g. 80 / 120 min used)
+- A table with time slots, task names, categories, priorities, and scheduling reasons
+- A ✔ success banner (or ⚠️ conflict warning if blocks overlap)
+- An expandable plain-English explanation from `explain_plan()`
+- Warning cards for any tasks skipped due to budget
+
+**Step 7 — CLI demo (no browser needed)**
+```bash
+python main.py
+```
+
+Sample output:
+```
+PawPal+ — CLI Demo  (Friday, July 03 2026)
+
+══════════════════════════════════════════════════════════════
+  🐾  Mochi (dog)  |  budget: 150 min
+──────────────────────────────────────────────────────────────
+  07:00–07:05  Heartworm med 🔁  (5 min)   [high]
+    → High priority — scheduled first.
+  07:05–07:15  Breakfast 🔁      (10 min)  [high]
+    → High priority — scheduled first.
+  07:25–07:55  Morning walk 🔁   (30 min)  [high]
+    → High priority — scheduled first.
+  08:25–08:45  Fetch session     (20 min)  [medium]
+    → Medium/low priority task — fits within available time.
+──────────────────────────────────────────────────────────────
+  Total: 120 min  |  Skipped: 0 task(s)
+  ✔  No scheduling conflicts.
+```

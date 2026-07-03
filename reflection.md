@@ -57,13 +57,26 @@ The scheduler uses a **greedy, priority-first** algorithm rather than an optimal
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+AI was used across every phase, but the nature of its contribution shifted as the project matured:
+
+- **Phase 1 (Design):** AI was most useful as a sounding board. I described the four core classes in plain language and asked it to produce a Mermaid.js class diagram. This surfaced a missing relationship (the original sketch didn't have `ScheduledBlock` — tasks were going to carry their own `scheduled_time` mutation). Having a visual representation immediately made the architecture clearer.
+
+- **Phase 2–3 (Implementation + UI):** I used agent mode to generate class skeletons from the UML, then filled in logic incrementally. The most effective prompts were narrow and specific: *"Write `sort_tasks_by_priority` using a lambda key that sorts by priority then duration"* rather than *"implement the scheduler."* Broad prompts tended to produce bloated code with unnecessary abstractions.
+
+- **Phase 4 (Algorithms):** Chat mode was useful for comparing approaches — e.g., asking whether a greedy or knapsack algorithm was more appropriate for daily pet care scheduling. The answer helped me articulate *why* I chose greedy (priority is non-negotiable in pet care; missing a medication task is worse than suboptimal total-minutes-packed).
+
+- **Phase 5 (Testing):** Asking "what are the most important boundary cases for a priority-based scheduler?" generated a useful checklist. I used it to audit my own test coverage and found gaps: the 1-minute-over-window edge case and adjacent-blocks-don't-conflict were both prompted by AI review.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+One concrete example: when asked to review the scheduler, the AI suggested replacing `filter_by_available_time()` with a proper 0/1 knapsack algorithm to maximise total minutes scheduled. The suggestion was technically correct — greedy can leave gaps when tasks have uneven sizes.
+
+I kept the greedy approach for two reasons:
+
+1. **Priority semantics matter more than packing efficiency.** A knapsack optimizer might demote a high-priority 45-minute medication task in favour of three 15-minute low-priority enrichment tasks that pack tighter. That's the wrong outcome for a pet-care application.
+2. **Readability and debuggability.** The greedy loop is 8 lines and obvious. The knapsack DP table is ~30 lines of index arithmetic that a busy developer (or student grader) would struggle to audit quickly.
+
+I documented this tradeoff explicitly in Section 2b.
 
 ---
 
@@ -95,12 +108,18 @@ Edge cases I would test next with more time:
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The separation of concerns between `pawpal_system.py` and `app.py` worked extremely well. Because all scheduling logic lives in the backend module, the Streamlit UI is thin — it just calls methods and displays results. This made Phase 6 UI upgrades painless: swapping `task.complete()` for `scheduler.mark_task_complete()` and adding `conflict_warnings()` banners required only UI-layer changes, zero backend rewrites.
+
+The test-driven mindset also paid off. Several edge cases (the 1-minute window overflow, the adjacent-blocks non-conflict) were caught by tests *before* they could surface as confusing UI bugs.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+The owner budget is treated as a single flat pool shared across all pets. In a real household with two dogs and a cat, some tasks genuinely compete for the same time slot while others are independent. A next iteration would model per-pet time windows and distinguish between tasks that require active owner participation vs. passive supervision.
+
+I would also add a proper date-persistence layer (even just JSON to disk) so that session state survives browser refresh. Currently, closing the Streamlit tab loses all data.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The most important lesson was about the division of responsibility between human architect and AI code generator. AI is fast and accurate at producing *implementations* of well-specified interfaces — give it a clear method signature and docstring, and it will fill in the body reliably. What it cannot do well is decide *which* interfaces belong in the system in the first place, or adjudicate between competing design tradeoffs that involve non-technical constraints (like "a medication task must never be demoted by a packing optimizer").
+
+The human architect's job is to own those decisions — to know *why* the system is structured the way it is, to push back on AI suggestions that are technically correct but contextually wrong, and to write tests that encode business rules rather than just coverage numbers. AI handles the "how"; the architect owns the "why."
